@@ -50,7 +50,8 @@ def get_hs300_returns(start_date, end_date):
         print(f"正在处理股票: {code}")
         try:
             stock_data = get_stock_price(code, start_date, end_date)
-            stock_data['future_return'] = stock_data['close_price'].pct_change(1).shift(-1)  # 计算未来1日收益率
+            # stock_data['future_return'] = stock_data['close_price'].pct_change(1).shift(-1)  # 计算未来1日收益率
+            stock_data['future_return'] = stock_data['close_price'].shift(-1) / stock_data['close_price'] - 1
             all_data.append(stock_data)
             time.sleep(0.5)  # 避免频繁请求导致 API 限制
         except Exception as e:
