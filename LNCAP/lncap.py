@@ -55,8 +55,36 @@ data['lncap'] = data.groupby('date')['lncap'].apply(standardize).reset_index(lev
 data['lncap'] = data['lncap'].fillna(0)  # 缺失值填充为 0
 
 # 数据对齐：确保每个日期的因子数据完整（避免部分股票数据缺失导致的对齐问题）
-aligned_data = data.pivot(index='date', columns='instrument', values='lncap').dropna(how='all', axis=1).reset_index()
-aligned_data = aligned_data.melt(id_vars='date', var_name='instrument', value_name='lncap')
+
+aligned_data = data
+
+# 行业市值中性化   用行业哑变量和市值进行回归
+# 数据在data的industry列
+# 行业数据转为哑变量
+# 行业数据转为哑变量
+industry_dummies = pd.get_dummies(data['industry'], drop_first=True).astype(int)
+
+# 将市值和行业哑变量作为自变量，mkt_cap_float 作为因变量进行回归
+X = pd.concat([aligned_data['lncap'], industry_dummies], axis=1)
+
+# 强制转换数据为数值类型，避免非数值数据类型
+X = X.apply(pd.to_numeric, errors='coerce')
+
+# 确保 X 和 y 中没有缺失值
+X = X.dropna()
+y = aligned_data.loc[X.index, 'lncap']  # 对应删除 y 中的缺失值
+# 确保 y 也是数值类型，如果不是，可以强制转换
+y = pd.to_numeric(y, errors='coerce')
+# 添加常数项
+X = sm.add_constant(X)
+
+# 使用 OLS 回归模型进行回归
+print(X.head())
+print(y.head())
+model = sm.OLS(y, X).fit()
+# 提取残差作为新的中性化因子值
+aligned_data['lncap'] = model.resid
+print(aligned_data.head())
 
 # 单因子检测：计算因子与未来收益的相关性
 # 示例：假设已知未来收益数据在 future_return 列
@@ -68,6 +96,7 @@ merged_data = pd.merge(aligned_data, returns_data, on=['date', 'instrument'], ho
 # 处理缺失值或无穷大
 merged_data['lncap'] = merged_data['lncap'].replace([np.inf, -np.inf], np.nan)  # 替换无穷大为 NaN
 merged_data = merged_data.dropna(subset=['lncap'])  # 删除包含 NaN 的行
+
 
 # 计算每天的 IC（因子与未来收益的 Spearman 相关性）
 def calculate_ic(group):
